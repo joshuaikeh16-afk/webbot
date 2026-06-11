@@ -25,7 +25,19 @@ const App = (() => {
       _rowId:      raw.id,
     };
   }
- 
+ const sidebar = document.querySelector(".sidebar");
+const overlay = document.querySelector(".sidebar-overlay");
+const menuBtn = document.querySelector(".topbar-hamburger");
+
+menuBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("open");
+    overlay.classList.toggle("open");
+});
+
+overlay.addEventListener("click", () => {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("open");
+});
   function parseUsers(rows) {
     if (!rows) return [];
     return rows.map(parseUser).filter(Boolean);
