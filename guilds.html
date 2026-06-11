@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AniGamble HQ — Guilds</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main">
+    <div class="page-header fade-in">
+      <div class="page-title">Guilds</div>
+      <div class="page-sub">Group rankings and guild economy</div>
+    </div>
+    <div class="card fade-in">
+      <div class="empty">
+        <div class="empty-icon">⚔️</div>
+        <div class="empty-text">Guild data coming soon. Add a <code>guilds</code> field to your Supabase records to populate this page.</div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="data/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/profile.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => renderSidebar('guilds'));</script>
+</body>
+</html>

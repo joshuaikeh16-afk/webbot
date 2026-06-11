@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AniGamble HQ — User Lookup</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main">
+    <div class="page-header fade-in">
+      <div class="page-title">User lookup</div>
+      <div class="page-sub">Search any player by phone number or name</div>
+    </div>
+
+    <div class="card fade-in" style="max-width:520px;margin-bottom:1.5rem;">
+      <div class="search-bar" style="margin-bottom:0.85rem;">
+        <span class="search-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </span>
+        <input type="text" id="lookup-input" placeholder="Enter phone number or name..." />
+      </div>
+      <button id="lookup-btn" style="background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:0.6rem 1.25rem;font-size:13.5px;font-weight:500;width:100%;cursor:pointer;transition:opacity 0.15s;" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">
+        Look up player
+      </button>
+    </div>
+
+    <div id="lookup-result"></div>
+  </main>
+</div>
+
+<script src="data/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/profile.js"></script>
+<script>
+async function doLookup() {
+  const val    = document.getElementById('lookup-input').value.trim();
+  if (!val) return;
+
+  const result = document.getElementById('lookup-result');
+  result.innerHTML = `<div class="loader"><div class="spinner"></div> Searching...</div>`;
+
+  let raw;
+  if (/^\d+$/.test(val.replace(/\s+/g, ''))) {
+    raw = await API.getUserByPhone(val.replace(/\s+/g, ''));
+  } else {
+    raw = await API.searchUsers(val);
+  }
+
+  const users = App.parseUsers(raw);
+
+  if (!users.length) {
+    result.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No player found for "<strong>${val}</strong>"</div></div>`;
+    return;
+  }
+
+  if (users.length === 1) {
+    result.innerHTML = renderProfileCard(users[0]);
+  } else {
+    result.innerHTML = `
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:0.75rem;">${users.length} players found</div>
+      ${users.map(u => `
+        <div class="card fade-in" style="margin-bottom:0.75rem;cursor:pointer;" onclick="expandUser('${u.phone || u.id}')">
+          <div class="user-cell">
+            ${App.renderAvatar(u, 36)}
+            <div class="user-cell-info" style="flex:1">
+              <div class="user-cell-name">${u.name}</div>
+              <div class="user-cell-phone">${u.phone || u.id}</div>
+            </div>
+            <span style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--gold)">${App.formatCoins(u.netWorth)}</span>
+          </div>
+        </div>
+      `).join('')}
+    `;
+  }
+}
+
+async function expandUser(phone) {
+  const result = document.getElementById('lookup-result');
+  result.innerHTML = `<div class="loader"><div class="spinner"></div> Loading...</div>`;
+  const raw  = await API.getUserByPhone(phone);
+  const user = App.parseUser(raw?.[0]);
+  if (!user) { result.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">User not found</div></div>`; return; }
+  result.innerHTML = renderProfileCard(user);
+}
+
+function renderProfileCard(u) {
+  const cardItems = u.cards.length
+    ? u.cards.map(c => `<div class="inventory-item"><span class="item-icon">🃏</span><div class="item-name">${c.name || c}</div></div>`).join('')
+    : '<div style="color:var(--text-3);font-size:12px;padding:0.5rem 0">No cards yet</div>';
+
+  const souvItems = u.souvenirs.length
+    ? u.souvenirs.map(s => `<div class="inventory-item"><span class="item-icon">🎁</span><div class="item-name">${s.name || s}</div></div>`).join('')
+    : '<div style="color:var(--text-3);font-size:12px;padding:0.5rem 0">No souvenirs yet</div>';
+
+  const roleBadge = u.role
+    ? `<span style="font-size:11px;background:var(--accent-dim,rgba(124,93,250,.15));color:var(--accent);padding:2px 8px;border-radius:4px;margin-left:6px;">${u.role}</span>`
+    : '';
+
+  return `
+    <div class="card fade-in">
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;">
+        ${App.renderAvatar(u, 56)}
+        <div>
+          <div style="font-family:var(--font-display);font-size:18px;font-weight:600;">${u.name}${roleBadge}</div>
+          <div style="font-size:12px;color:var(--text-3);margin-top:3px;">${u.phone || u.id}</div>
+          ${u.guild ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;">⚔️ ${u.guild}</div>` : ''}
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Balance</div>
+        <div class="coin-display">
+          <div>
+            <div class="amount">${App.formatCoins(u.netWorth)}</div>
+            <div class="label">net worth</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:var(--text-3);">
+          <span>💼 Wallet: <strong style="color:var(--text)">${App.formatCoins(u.coins)}</strong></span>
+          <span>🏦 Bank: <strong style="color:var(--text)">${App.formatCoins(u.bank || 0)}</strong></span>
+        </div>
+      </div>
+
+      <div class="modal-section" style="margin-top:1rem;">
+        <div class="modal-section-title">Cards (${u.cards.length})</div>
+        <div class="inventory-grid">${cardItems}</div>
+      </div>
+
+      <div class="modal-section" style="margin-top:1rem;">
+        <div class="modal-section-title">Souvenirs (${u.souvenirs.length})</div>
+        <div class="inventory-grid">${souvItems}</div>
+      </div>
+
+      ${u.joinedAt ? `
+      <div class="modal-section" style="margin-top:1rem;">
+        <div class="modal-section-title">Joined</div>
+        <div style="font-size:13px;color:var(--text-3)">${App.timeAgo(u.joinedAt)}</div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderSidebar('profile');
+  document.getElementById('lookup-btn').addEventListener('click', doLookup);
+  document.getElementById('lookup-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLookup();
+  });
+});
+</script>
+</body>
+</html>

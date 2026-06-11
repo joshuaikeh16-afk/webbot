@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AniGamble HQ — Overview</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main">
+   <div class="page-header fade-in" style="display:flex;justify-content:space-between;align-items:center;">
+  <div>
+    <div class="page-title">Overview</div>
+    <div class="page-sub">Live snapshot of the GC economy</div>
+  </div>
+
+  <a href="member-login.html" class="login-btn">
+    🔑 Login
+  </a>
+</div>
+    <div class="stat-grid" id="stats">
+      <div class="stat-card"><div class="stat-label">Total players</div><div class="stat-value purple" id="s-players">—</div></div>
+      <div class="stat-card"><div class="stat-label">Coins in circulation</div><div class="stat-value gold" id="s-coins">—</div></div>
+      <div class="stat-card"><div class="stat-label">Cards traded</div><div class="stat-value" id="s-cards">—</div></div>
+      <div class="stat-card"><div class="stat-label">Prime Points</div><div class="stat-value green" id="s-souv">—</div></div>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Recent players -->
+      <div class="card fade-in">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <div style="font-weight:500;font-size:14px;">Recent players</div>
+          <a href="leaderboard.html" style="font-size:12px;color:var(--accent);">See all →</a>
+        </div>
+        <div id="recent-list">
+          <div class="loader"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+
+      <!-- Top balances -->
+      <div class="card fade-in">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <div style="font-weight:500;font-size:14px;">Top balances</div>
+          <a href="leaderboard.html" style="font-size:12px;color:var(--accent);">Full leaderboard →</a>
+        </div>
+        <div id="top-list">
+          <div class="loader"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- All players table -->
+    <div class="card fade-in" style="margin-top:1.25rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <div style="font-weight:500;font-size:14px;">All players</div>
+      </div>
+      <div class="search-bar">
+        <span class="search-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </span>
+        <input type="text" id="search-input" placeholder="Search by name or phone..." />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Net Worth</th>
+              <th>Cards</th>
+              <th>Prime Points</th>
+            </tr>
+          </thead>
+          <tbody id="all-users-body">
+            <tr><td colspan="4"><div class="loader"><div class="spinner"></div> Loading...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Profile modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script src="data/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/games.js"></script>
+<script src="js/leaderboard.js"></script>
+<script>
+let allUsers = [];
+
+async function loadDashboard() {
+  const raw = await API.getAllUsers();
+  allUsers  = App.parseUsers(raw);
+
+  // Stats — use netWorth (primos + bank) for total coins in circulation
+  const totalCoins = allUsers.reduce((a, u) => a + u.netWorth, 0);
+  const totalCards = allUsers.reduce((a, u) => a + u.cards.length, 0);
+  const totalSouv  = allUsers.reduce((a, u) => a + (u.primePoints || u.souvenirs?.length || 0), 0);
+
+  document.getElementById('s-players').textContent = allUsers.length;
+  document.getElementById('s-coins').textContent   = App.formatCoins(totalCoins);
+  document.getElementById('s-cards').textContent   = totalCards;
+  document.getElementById('s-souv').textContent    = totalSouv;
+
+  renderRecentList();
+  renderTopList();
+  renderAllUsers(allUsers);
+}
+
+function renderRecentList() {
+  // Show 6 most recently registered
+  const recent = [...allUsers]
+    .filter(u => u.joinedAt)
+    .sort((a, b) => b.joinedAt - a.joinedAt)
+    .slice(0, 6);
+
+  document.getElementById('recent-list').innerHTML = recent.map(u => `
+    <div class="user-cell" style="padding:0.5rem 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openProfileModal('${u.phone}')">
+      ${App.renderAvatar(u, 32)}
+      <div class="user-cell-info" style="flex:1">
+        <div class="user-cell-name">${u.name}</div>
+        <div class="user-cell-phone">${u.phone || u.id}</div>
+      </div>
+      <span style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--gold)">${App.formatCoins(u.netWorth)}</span>
+    </div>
+  `).join('') || '<div style="color:var(--text-3);font-size:13px;padding:1rem 0">No players yet</div>';
+}
+
+function renderTopList() {
+  const top    = [...allUsers].sort((a, b) => b.netWorth - a.netWorth).slice(0, 6);
+  const medals = ['🥇', '🥈', '🥉'];
+
+  document.getElementById('top-list').innerHTML = top.map((u, i) => `
+    <div class="user-cell" style="padding:0.5rem 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openProfileModal('${u.phone}')">
+      <span style="font-size:16px;width:24px;text-align:center;">${medals[i] || (i + 1)}</span>
+      ${App.renderAvatar(u, 32)}
+      <div class="user-cell-info" style="flex:1">
+        <div class="user-cell-name">${u.name}</div>
+      </div>
+      <span style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--gold)">${App.formatCoins(u.netWorth)}</span>
+    </div>
+  `).join('') || '<div style="color:var(--text-3);font-size:13px;padding:1rem 0">No players yet</div>';
+}
+
+function renderAllUsers(users) {
+  const tbody = document.getElementById('all-users-body');
+  if (!users.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">🎴</div><div class="empty-text">No players found</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr onclick="openProfileModal('${u.phone}')">
+      <td>
+        <div class="user-cell">
+          ${App.renderAvatar(u, 32)}
+          <div class="user-cell-info">
+            <div class="user-cell-name">${u.name}</div>
+            <div class="user-cell-phone">${u.phone || u.id}</div>
+          </div>
+        </div>
+      </td>
+      <td style="font-family:var(--font-display);font-weight:600;color:var(--gold)">${App.formatCoins(u.netWorth)}</td>
+      <td><span class="badge badge-purple">${u.cards.length}</span></td>
+      <td><span class="badge badge-green">${u.primePoints ?? u.souvenirs?.length ?? 0} ◈</span></td>
+    </tr>
+  `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderSidebar('index');
+  loadDashboard();
+
+  document.getElementById('search-input').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase().trim();
+    const filtered = q
+      ? allUsers.filter(u => u.name.toLowerCase().includes(q) || (u.phone && u.phone.includes(q)))
+      : allUsers;
+    renderAllUsers(filtered);
+  });
+});
+</script>
+</body>
+</html>

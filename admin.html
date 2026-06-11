@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>AniGamble HQ — Admin</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <link rel="stylesheet" href="css/dashboard.css"/>
+  <link rel="stylesheet" href="css/animations.css"/>
+  <style>
+    .admin-tabs { display:flex; gap:6px; margin-bottom:1.5rem; }
+    .tab-btn {
+      padding:0.5rem 1rem; border-radius:var(--radius); border:1px solid var(--border);
+      background:var(--bg-3); color:var(--text-2); font-size:13px; font-weight:500;
+      cursor:pointer; transition:all 0.15s; font-family:var(--font-body);
+    }
+    .tab-btn.active { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
+    /* Coins form */
+    .coins-form { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; margin-bottom:1.25rem; }
+    .coins-form input {
+      background:var(--bg-3); border:1px solid var(--border); border-radius:var(--radius);
+      padding:0.6rem 0.85rem; color:var(--text); font-size:13.5px; outline:none;
+      transition:border-color 0.15s;
+    }
+    .coins-form input:focus { border-color:var(--accent); }
+    .coins-form label { font-size:11.5px; color:var(--text-3); margin-bottom:5px; display:block; font-weight:500; }
+    .btn { padding:0.6rem 1.1rem; border-radius:var(--radius); border:none; font-size:13px; font-weight:600; cursor:pointer; font-family:var(--font-body); transition:opacity 0.15s; }
+    .btn:hover { opacity:0.85; }
+    .btn-primary { background:var(--accent); color:#fff; }
+    .btn-danger  { background:var(--danger); color:#fff; }
+    .btn-success { background:var(--success); color:#fff; }
+    .btn-sm { padding:0.35rem 0.75rem; font-size:12px; }
+
+    /* Cashout request card */
+    .cashout-card {
+      background:var(--bg-3); border:1px solid var(--border); border-radius:var(--radius);
+      padding:1rem 1.1rem; margin-bottom:0.75rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+    }
+    .cashout-card.pending { border-left:3px solid var(--gold); }
+    .cashout-card.approved { border-left:3px solid var(--success); opacity:0.65; }
+    .cashout-card.rejected { border-left:3px solid var(--danger); opacity:0.55; }
+
+    .cashout-info { flex:1; min-width:180px; }
+    .cashout-name { font-weight:600; font-size:14px; }
+    .cashout-meta { font-size:12px; color:var(--text-3); margin-top:2px; }
+    .cashout-amount { font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--gold); }
+
+    .cashout-actions { display:flex; gap:6px; }
+
+    /* Badge status */
+    .status-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; }
+    .status-pending  { background:var(--gold-dim); color:var(--gold); }
+    .status-approved { background:rgba(29,158,117,0.12); color:var(--success); }
+    .status-rejected { background:rgba(226,75,74,0.1); color:var(--danger); }
+
+    /* Log table */
+    .log-row td { font-size:12.5px; }
+    .notification-dot {
+      display:inline-block; width:8px; height:8px; border-radius:50%;
+      background:var(--gold); margin-left:6px; vertical-align:middle;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+    @media(max-width:640px) { .coins-form { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main">
+    <div class="page-header fade-in" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+      <div>
+        <div class="page-title">Admin Panel <span style="font-size:13px;background:rgba(226,75,74,0.1);color:#E24B4A;padding:2px 8px;border-radius:20px;font-family:var(--font-body);font-weight:600;vertical-align:middle;">Staff only</span></div>
+        <div class="page-sub">Manage Prime Coins, Prime Points and cashout requests</div>
+      </div>
+      <button class="btn" style="background:var(--bg-3);color:var(--text-2);border:1px solid var(--border);" onclick="Auth.logout()">Sign out</button>
+    </div>
+
+    <div class="admin-tabs">
+      <button class="tab-btn active" onclick="switchTab('coins')">🪙 Add / Deduct Coins</button>
+      <button class="tab-btn" onclick="switchTab('primepoints')">◈ Prime Points</button>
+      <button class="tab-btn" onclick="switchTab('cashouts')">Cashout Requests <span id="pending-dot" style="display:none" class="notification-dot"></span></button>
+      <button class="tab-btn" onclick="switchTab('log')">Transaction Log</button>
+    </div>
+
+    <!-- TAB: Coins -->
+    <div class="tab-panel active" id="tab-coins">
+      <div class="card fade-in">
+        <div style="font-weight:500;font-size:14px;margin-bottom:1rem;">Adjust player's Prime Coins</div>
+        <div class="coins-form">
+          <div>
+            <label>Phone number</label>
+            <input type="text" id="coin-phone" placeholder="e.g. 2348123534689"/>
+          </div>
+          <div>
+            <label>Amount</label>
+            <input type="number" id="coin-amount" placeholder="500" min="1"/>
+          </div>
+          <div style="display:flex;gap:6px;padding-bottom:1px;">
+            <button class="btn btn-success" onclick="adjustCoins('add')">+ Add</button>
+            <button class="btn btn-danger"  onclick="adjustCoins('deduct')">− Deduct</button>
+          </div>
+        </div>
+        <div id="coin-result" style="font-size:13px;color:var(--text-3);min-height:20px;"></div>
+      </div>
+
+      <!-- Quick lookup -->
+      <div class="card fade-in" style="margin-top:1.25rem;">
+        <div style="font-weight:500;font-size:14px;margin-bottom:1rem;">Quick player lookup</div>
+        <div class="search-bar">
+          <span class="search-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </span>
+          <input type="text" id="admin-search" placeholder="Search name or phone..." oninput="adminSearch(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Player</th><th>Prime Coins</th><th>Action</th></tr></thead>
+            <tbody id="admin-users-body">
+              <tr><td colspan="3"><div class="loader"><div class="spinner"></div> Loading...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Prime Points -->
+    <div class="tab-panel" id="tab-primepoints">
+      <div class="card fade-in">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;">
+          <span style="font-size:22px;">◈</span>
+          <div>
+            <div style="font-weight:600;font-size:14px;color:#a78bfa;">Grant / Deduct Prime Points</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:2px;">Prime Points are the <strong>only</strong> currency players can gamble with. They're stored in the player's browser. Use this to credit a player after they DM you.</div>
+          </div>
+        </div>
+        <div class="coins-form">
+          <div>
+            <label>Phone number</label>
+            <input type="text" id="pp-phone" placeholder="e.g. 2348123534689"/>
+          </div>
+          <div>
+            <label>Amount (PP)</label>
+            <input type="number" id="pp-amount" placeholder="500" min="1"/>
+          </div>
+          <div style="display:flex;gap:6px;padding-bottom:1px;">
+            <button class="btn btn-success" onclick="adjustPP('add')" style="background:linear-gradient(135deg,#7C5DFA,#a78bfa);border:none;">◈ Grant</button>
+            <button class="btn btn-danger"  onclick="adjustPP('deduct')">− Deduct</button>
+          </div>
+        </div>
+        <div id="pp-result" style="font-size:13px;color:var(--text-3);min-height:20px;"></div>
+      </div>
+
+      <!-- PP balances lookup -->
+      <div class="card fade-in" style="margin-top:1.25rem;border-color:rgba(167,139,250,0.25);">
+        <div style="font-weight:500;font-size:14px;margin-bottom:1rem;">Current Prime Points balances <span style="font-size:11px;color:var(--text-3);font-weight:400;">(this browser's store)</span></div>
+        <div class="search-bar">
+          <span class="search-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </span>
+          <input type="text" id="pp-search" placeholder="Search by phone..." oninput="renderPPTable(this.value)"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Phone</th>
+                <th>Prime Points</th>
+                <th>W / G</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="pp-users-body">
+              <tr><td colspan="4"><div class="empty"><div class="empty-icon">◈</div><div class="empty-text">No Prime Points data in this browser yet</div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:0.75rem;font-size:11px;color:var(--text-3);">
+          ⚠️ Prime Points are stored per-browser (localStorage). This table only shows data from the device you're currently using.
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Cashouts -->
+    <div class="tab-panel" id="tab-cashouts">
+      <div class="card fade-in">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.5rem;">
+          <div style="font-weight:500;font-size:14px;">Cashout Requests</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm" style="background:var(--bg-3);color:var(--text-2);border:1px solid var(--border);" onclick="loadCashouts('pending')">Pending</button>
+            <button class="btn btn-sm" style="background:var(--bg-3);color:var(--text-2);border:1px solid var(--border);" onclick="loadCashouts('all')">All</button>
+          </div>
+        </div>
+        <div id="cashout-list"><div class="loader"><div class="spinner"></div> Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- TAB: Log -->
+    <div class="tab-panel" id="tab-log">
+      <div class="card fade-in">
+        <div style="font-weight:500;font-size:14px;margin-bottom:1rem;">Coin transaction log</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Player</th><th>Action</th><th>Amount</th><th>By</th></tr></thead>
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="data/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/profile.js"></script>
+<script>
+Auth.requireAuth();
+
+let allAdminUsers = [];
+// In-memory log (persists for session)
+const coinLog = JSON.parse(sessionStorage.getItem('agi_coin_log') || '[]');
+
+function saveLog() { sessionStorage.setItem('agi_coin_log', JSON.stringify(coinLog)); }
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const tabs = ['coins','primepoints','cashouts','log'];
+  const idx = tabs.indexOf(name);
+  document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'cashouts') loadCashouts('pending');
+  if (name === 'log') renderLog();
+  if (name === 'primepoints') renderPPTable();
+}
+  if (name === 'log') renderLog();
+
+
+async function loadAdminUsers() {
+  const raw = await API.getAllUsers();
+  allAdminUsers = App.parseUsers(raw);
+  renderAdminUsers(allAdminUsers);
+}
+
+function renderAdminUsers(users) {
+  const tbody = document.getElementById('admin-users-body');
+  if (!users.length) {
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No players found</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = users.slice(0,30).map(u => `
+    <tr>
+      <td>
+        <div class="user-cell">
+          ${App.renderAvatar(u, 30)}
+          <div class="user-cell-info">
+            <div class="user-cell-name">${u.name}</div>
+            <div class="user-cell-phone">${u.phone}</div>
+          </div>
+        </div>
+      </td>
+      <td style="font-family:var(--font-display);font-weight:600;color:var(--gold)">${App.formatCoins(u.coins)}</td>
+      <td>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-sm btn-success" onclick="quickAdjust('${u.phone}','${u.name}','add')">+</button>
+          <button class="btn btn-sm btn-danger"  onclick="quickAdjust('${u.phone}','${u.name}','deduct')">−</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function adminSearch(q) {
+  const filtered = q ? allAdminUsers.filter(u =>
+    u.name.toLowerCase().includes(q.toLowerCase()) || u.phone.includes(q)
+  ) : allAdminUsers;
+  renderAdminUsers(filtered);
+}
+
+async function adjustCoins(action) {
+  const phone = document.getElementById('coin-phone').value.trim();
+  const amount = parseInt(document.getElementById('coin-amount').value);
+  const resultEl = document.getElementById('coin-result');
+
+  if (!phone || !amount || amount <= 0) {
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = 'Enter a valid phone number and amount.';
+    return;
+  }
+
+  resultEl.style.color = 'var(--text-3)';
+  resultEl.textContent = 'Looking up player...';
+
+  const raw = await API.getUserByPhone(phone);
+  const user = App.parseUser(raw?.[0]);
+  if (!user) {
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = `No player found for ${phone}`;
+    return;
+  }
+
+  const newCoins = action === 'add' ? user.coins + amount : Math.max(0, user.coins - amount);
+  const updatedData = { ...user.raw, coins: newCoins };
+
+  const res = await API.updateUser(user.id, { data: updatedData });
+  if (res === null) {
+    // Supabase may return empty array on success — treat as ok if no error thrown
+  }
+
+  // Log it
+  coinLog.unshift({ time: new Date().toISOString(), name: user.name, phone, action, amount, before: user.coins, after: newCoins });
+  saveLog();
+
+  resultEl.style.color = action === 'add' ? 'var(--success)' : 'var(--danger)';
+  resultEl.textContent = `✓ ${action === 'add' ? 'Added' : 'Deducted'} ${amount} Prime Coins ${action === 'add' ? 'to' : 'from'} ${user.name}. New balance: ${App.formatCoins(newCoins)}`;
+
+  // Refresh table
+  loadAdminUsers();
+
+  document.getElementById('coin-phone').value = '';
+  document.getElementById('coin-amount').value = '';
+}
+
+function quickAdjust(phone, name, action) {
+  document.getElementById('coin-phone').value = phone;
+  document.getElementById('coin-amount').value = '';
+  switchTab('coins');
+  document.getElementById('coin-amount').focus();
+  // Pre-fill action hint
+  document.getElementById('coin-result').style.color = 'var(--text-3)';
+  document.getElementById('coin-result').textContent = `Ready to ${action} coins for ${name}`;
+}
+
+async function loadCashouts(filter = 'pending') {
+  const list = document.getElementById('cashout-list');
+  list.innerHTML = `<div class="loader"><div class="spinner"></div> Loading...</div>`;
+
+  const all = await API.getCashouts();
+  const items = filter === 'pending' ? all.filter(c => c.status === 'pending') : all;
+
+  // Update dot
+  const pending = all.filter(c => c.status === 'pending');
+  document.getElementById('pending-dot').style.display = pending.length ? 'inline-block' : 'none';
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">${filter === 'pending' ? 'No pending cashout requests' : 'No cashout requests yet'}</div></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(c => `
+    <div class="cashout-card ${c.status}" id="co-${c.id}">
+      <div class="cashout-info">
+        <div class="cashout-name">${c.player_name}</div>
+        <div class="cashout-meta">${c.phone} · ${App.timeAgo(c.created_at)}</div>
+        ${c.note ? `<div class="cashout-meta" style="margin-top:3px;color:var(--text-2)">"${c.note}"</div>` : ''}
+      </div>
+      <div class="cashout-amount" style="color:#a78bfa;">◈ ${c.amount.toLocaleString()}</div>
+      <span class="status-badge status-${c.status}">${c.status}</span>
+      ${c.status === 'pending' ? `
+        <div class="cashout-actions">
+          <button class="btn btn-sm btn-success" onclick="resolveCashout('${c.id}','approved',${c.amount},'${c.phone}')">Approve & deduct</button>
+          <button class="btn btn-sm btn-danger"  onclick="resolveCashout('${c.id}','rejected',0,'')">Reject</button>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+async function resolveCashout(id, status, amount, phone) {
+  if (status === 'approved' && phone && amount > 0) {
+    // Deduct coins
+    const raw = await API.getUserByPhone(phone);
+    const user = App.parseUser(raw?.[0]);
+    if (user) {
+      const newCoins = Math.max(0, user.coins - amount);
+      await API.updateUser(user.id, { data: { ...user.raw, coins: newCoins } });
+      coinLog.unshift({ time: new Date().toISOString(), name: user.name, phone, action: 'cashout-deduct', amount, before: user.coins, after: newCoins });
+      saveLog();
+    }
+  }
+  await API.updateCashout(id, { status, resolved_at: new Date().toISOString() });
+  App.showToast(status === 'approved' ? '✓ Cashout approved & coins deducted' : 'Cashout rejected');
+  loadCashouts('pending');
+}
+
+function renderLog() {
+  const tbody = document.getElementById('log-body');
+  if (!coinLog.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No transactions this session</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = coinLog.map(l => {
+    const isPP     = l.currency === 'PP';
+    const symbol   = isPP ? '◈' : '🪙';
+    const isDeduct = l.action.includes('deduct') || l.action === 'cashout-deduct';
+    const amtStr   = isPP ? `${l.amount.toLocaleString()} PP` : App.formatCoins(l.amount);
+    const beforeStr = isPP ? `◈${l.before}` : App.formatCoins(l.before);
+    const afterStr  = isPP ? `◈${l.after}`  : App.formatCoins(l.after);
+    return `
+    <tr class="log-row">
+      <td class="td-muted">${new Date(l.time).toLocaleTimeString()}</td>
+      <td>${l.name}<br><span style="font-size:11px;color:var(--text-3)">${l.phone}</span></td>
+      <td><span class="badge ${isDeduct ? 'badge-gold' : isPP ? 'badge-purple' : 'badge-green'}">${l.action}</span></td>
+      <td style="font-family:var(--font-display);font-weight:600;color:${isPP ? '#a78bfa' : 'inherit'}">${isDeduct ? '−' : '+'}${symbol} ${amtStr}</td>
+      <td class="td-muted">${beforeStr} → ${afterStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Prime Points Admin Functions ─────────────────────────────
+const PP_KEY = 'agi_prime_points';
+
+function loadPPStore() {
+  try { return JSON.parse(localStorage.getItem(PP_KEY) || '{}'); } catch { return {}; }
+}
+function savePPStore(store) { localStorage.setItem(PP_KEY, JSON.stringify(store)); }
+
+function adjustPP(action) {
+  const phone    = document.getElementById('pp-phone').value.trim().replace(/\s+/g,'');
+  const amount   = parseInt(document.getElementById('pp-amount').value);
+  const resultEl = document.getElementById('pp-result');
+
+  if (!phone || !amount || amount <= 0) {
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = 'Enter a valid phone number and amount.';
+    return;
+  }
+
+  const store = loadPPStore();
+  const rec   = store[phone] || { points: 0, wins: 0, games: 0, history: [] };
+
+  const before = rec.points;
+  if (action === 'add') {
+    rec.points += amount;
+    rec.history.unshift({ points: amount, game: 'ADMIN_GRANT', time: Date.now() });
+  } else {
+    if (amount > rec.points) {
+      resultEl.style.color = 'var(--danger)';
+      resultEl.textContent = `Player only has ${rec.points.toLocaleString()} PP — can't deduct ${amount}.`;
+      return;
+    }
+    rec.points -= amount;
+    rec.history.unshift({ points: -amount, game: 'ADMIN_DEDUCT', time: Date.now() });
+  }
+  if (rec.history.length > 50) rec.history.pop();
+  store[phone] = rec;
+  savePPStore(store);
+
+  // Also log it in coinLog for the Transaction Log tab
+  coinLog.unshift({
+    time: new Date().toISOString(),
+    name: phone,
+    phone,
+    action: action === 'add' ? 'pp-grant' : 'pp-deduct',
+    amount,
+    before,
+    after: rec.points,
+    currency: 'PP'
+  });
+  saveLog();
+
+  resultEl.style.color = action === 'add' ? '#a78bfa' : 'var(--danger)';
+  resultEl.textContent = `✓ ${action === 'add' ? 'Granted' : 'Deducted'} ${amount.toLocaleString()} PP ${action === 'add' ? 'to' : 'from'} ${phone}. New balance: ◈ ${rec.points.toLocaleString()}`;
+
+  document.getElementById('pp-phone').value  = '';
+  document.getElementById('pp-amount').value = '';
+  renderPPTable();
+}
+
+function renderPPTable(query = '') {
+  const tbody = document.getElementById('pp-users-body');
+  const store = loadPPStore();
+  let entries = Object.entries(store)
+    .map(([phone, rec]) => ({ phone, points: rec.points || 0, wins: rec.wins || 0, games: rec.games || 0 }))
+    .sort((a, b) => b.points - a.points);
+
+  if (query) entries = entries.filter(e => e.phone.includes(query));
+
+  if (!entries.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-icon">◈</div><div class="empty-text">${query ? 'No match found' : 'No Prime Points data in this browser yet'}</div></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = entries.map(e => `
+    <tr>
+      <td style="font-size:13px;">${e.phone}</td>
+      <td style="font-family:var(--font-display);font-weight:700;color:#a78bfa;">◈ ${e.points.toLocaleString()}</td>
+      <td style="font-size:12px;color:var(--text-3);">${e.wins}W · ${e.games}G</td>
+      <td>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#7C5DFA,#a78bfa);color:#fff;border:none;" onclick="quickAdjustPP('${e.phone}','add')">◈ +</button>
+          <button class="btn btn-sm btn-danger" onclick="quickAdjustPP('${e.phone}','deduct')">−</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function quickAdjustPP(phone, action) {
+  document.getElementById('pp-phone').value  = phone;
+  document.getElementById('pp-amount').value = '';
+  switchTab('primepoints');
+  document.getElementById('pp-amount').focus();
+  document.getElementById('pp-result').style.color = 'var(--text-3)';
+  document.getElementById('pp-result').textContent = `Ready to ${action === 'add' ? 'grant PP to' : 'deduct PP from'} ${phone}`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderSidebar('admin');
+  loadAdminUsers();
+
+  // Check for pending cashouts on load
+  API.getCashouts().then(all => {
+    const pending = (all || []).filter(c => c.status === 'pending');
+    if (pending.length) document.getElementById('pending-dot').style.display = 'inline-block';
+  });
+});
+</script>
+</body>
+</html>
